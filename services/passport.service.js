@@ -26,6 +26,7 @@ passport.use(
             username: fullName,
             email: email,
             password: "", // no password for Google users
+            profilePic: profilePic
           });
           await user.save();
         }
