@@ -62,9 +62,11 @@ app.get(
 
 const userRoutes = require("../routers/user.routes.js");
 const dailyScrumRoutes = require('../routers/daily-scrum.routes.js')
+const titleRoutes = require('../routers/title.routes.js')
 
 app.use("/api/user", userRoutes);
 app.use('/api/daily-scrum', dailyScrumRoutes)
+app.use('/api/title', titleRoutes)
 
 const connectDB = require("../config/db");
 

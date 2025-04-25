@@ -15,10 +15,14 @@ const register = async (req, res) => {
 
     if (existing) {
       if (existing.username === username) {
-        return res.status(400).json({ message: "Username already exists" });
+        return res.status(400).json({
+          msg: "Username already exists" 
+        });
       }
       if (existing.email === email) {
-        return res.status(400).json({ message: "Email already exists" });
+        return res.status(400).json({
+          msg: "Email already exists"
+        });
       }
     }
 
@@ -31,12 +35,16 @@ const register = async (req, res) => {
     });
 
     res.status(200).json({
-      message: "Registration complete",
-      username: newUser.username,
+      msg: "registration completed!!",
+      status: 200,
+      info: {
+        username: newUser.username,
+        email: newUser.email
+      },
     });
   } catch (error) {
     res.status(500).json({
-      message: error.message,
+      msg: error.message,
     });
   }
 };
@@ -47,12 +55,16 @@ const login = async (req, res) => {
 
     const userResult = await User.findOne({ username });
     if (!userResult) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        msg: "User not found"
+      });
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, userResult.password);
     if (!isPasswordCorrect) {
-      return res.status(400).json({ message: "Invalid password" });
+      return res.status(400).json({
+        msg: "Invalid password"
+      });
     }
 
     const token = jwt.sign({ id: userResult._id }, process.env.jwt_secret, {
@@ -60,21 +72,27 @@ const login = async (req, res) => {
     });
         
     res.status(200).json({
-      message: "Login complete!",
+      msg: "Login complete!",
+      status: 200,
       token: token, // Return token directly
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      msg: error.message
+    });
   }
 };
 
 const logout = (req, res) => {
   try {
     // With JWT, logout on client side just means forgetting the token
-    res.status(200).json({ message: "Logout complete! Please discard your token on the client side." });
+    res.status(200).json({
+      msg: "logout completed!!",
+      status: 200
+    });
   } catch (error) {
     res.status(500).json({
-      message: "Logout failed...",
+      msg: "Logout failed...",
       error: error.message,
     });
   }
@@ -84,16 +102,19 @@ const getInfo = async (req, res) => {
   const user = await User.findById(req.user.id); // still fetch DB data if needed
 
   if (!user) {
-    return res.status(404).json({ message: "User not found" });
+    return res.status(404).json({
+      msg: "User not found"
+    });
   }
 
-  res.json({
-    message: "Authenticated",
-    user: {
+  res.status(200).json({
+    msg: "fetch user's info completed!!",
+    status: 200,
+    info: {
       id: user._id,
       username: user.username,
       email: user.email,
-      profilePic: req.user.profilePic || null , // <-- this comes from session, not DB
+      profilePic: user.profilePic || null , // <-- this comes from session, not DB
     },
   });
 };
