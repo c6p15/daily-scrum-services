@@ -19,8 +19,16 @@ const DailyScrumPostSchema = mongoose.Schema(
             type: [String],
             default: []
         },
-        review: {
-            type: [Object],
+        review: [
+            {
+                review_text: {type: String},
+                score: {type: String},
+                reviewer: {type: String}
+            },
+            { timestamps: true }
+        ],
+        writer: {
+            type: String
         },
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
