@@ -14,6 +14,9 @@ const UserSchema = mongoose.Schema(
         password: {
             type: String, 
             maxlength: 255
+        },
+        profilePic: {
+            type: String,
         }
     }
 )
