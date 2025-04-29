@@ -31,8 +31,6 @@ passport.use(
           await user.save();
         }
 
-        user._doc.profilePic = profilePic;
-
         return done(null, user);
       } catch (error) {
         return done(error, null);

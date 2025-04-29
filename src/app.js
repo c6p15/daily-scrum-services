@@ -51,6 +51,7 @@ app.get(
       {
         id: req.user._id,
         email: req.user.email,
+        username: req.user.username
       },
       process.env.jwt_secret,
       { expiresIn: "30d" }
