@@ -35,7 +35,7 @@ const register = async (req, res) => {
     });
 
     res.status(200).json({
-      msg: "registration completed!!",
+      msg: "Registration completed!!",
       status: 200,
       info: {
         username: newUser.username,
@@ -67,7 +67,10 @@ const login = async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ id: userResult._id }, process.env.jwt_secret, {
+    const token = jwt.sign({
+      id: userResult._id,
+      username: userResult.username 
+    }, process.env.jwt_secret, {
       expiresIn: "30d",
     });
         
@@ -83,20 +86,30 @@ const login = async (req, res) => {
   }
 };
 
-const logout = (req, res) => {
+const logout = async (req, res) => {
   try {
-    // With JWT, logout on client side just means forgetting the token
-    res.status(200).json({
-      msg: "logout completed!!",
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(401).json({
+        msg: "No token found. Already logged out or not logged in."
+      });
+    }
+
+    // Just send success, the client should remove the token
+    return res.status(200).json({
+      msg: "Logout completed!!",
       status: 200
     });
+
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       msg: "Logout failed...",
       error: error.message,
     });
   }
 };
+
 
 const getInfo = async (req, res) => {
   const user = await User.findById(req.user.id); // still fetch DB data if needed
