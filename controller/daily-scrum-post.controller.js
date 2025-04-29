@@ -120,34 +120,42 @@ const updateDailyScrumPost = async (req, res) => {
 
 const getAllDailyScrum = async (req, res) => {
   try {
-    const dailyScrumPosts = await DailyScrumPost.find()
-      .populate("user_id", "username email") // Optional: Populate user details
+    const { title } = req.query;
+
+    // Build the query object
+    const query = {};
+    if (title) {
+      query.title = { $regex: title, $options: "i" }; // Case-insensitive partial match
+    }
+
+    const dailyScrumPosts = await DailyScrumPost.find(query)
+      .populate("user_id", "username email")
       .sort({ createdAt: -1 });
 
     if (!dailyScrumPosts || dailyScrumPosts.length === 0) {
       return res.status(404).json({ message: "No daily scrum posts found." });
     }
 
-    // Add file URLs to each daily scrum post
+    // Generate signed URLs for file attachments
     const dailyScrumWithUrls = await Promise.all(
       dailyScrumPosts.map(async (post) => {
         const fileUrls = await Promise.all(
           post.files.map(async (fileName) => {
-            return await getObjectSignedUrl(fileName); // Get the signed URL for each file
+            return await getObjectSignedUrl(fileName);
           })
         );
 
         return {
           ...post.toObject(),
-          fileUrls, // Include the URLs in the response
+          fileUrls,
         };
       })
     );
 
     res.status(200).json({
-      msg: "fetch daily-scrums completed!!",
+      msg: "Fetch daily-scrums completed!!",
       status: 200,
-      dailyScrumPosts: dailyScrumWithUrls,
+      dailyScrums: dailyScrumWithUrls,
     });
   } catch (error) {
     console.error(error.message);
