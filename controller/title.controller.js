@@ -1,24 +1,25 @@
-const Title = require("../models/title.model.js"); // Import the Title model
+const Title = require("../models/title.model.js"); 
 
-// Create a new Title
 const createTitle = async (req, res) => {
   try {
-    const { title_name } = req.body; // Extract title_name from request body
+    const user_id = req.user.id;
+    const { title_name } = req.body;
 
-    // Check if title_name is provided
+    
     if (!title_name) {
       return res.status(400).json({ error: "Title name is required" });
     }
 
-    // Create a new title
-    const newTitle = new Title({ title_name });
+    const newTitle = new Title({ 
+      title_name,
+      user_id
+     });
 
-    // Save the title to the database
     await newTitle.save();
 
     res.status(201).json({
-      success: true,
-      message: "Title created successfully",
+      msg: "create title completed!!",
+      status: 201,
       title: newTitle,
     });
   } catch (error) {
@@ -27,13 +28,13 @@ const createTitle = async (req, res) => {
   }
 };
 
-// Get all Titles
 const getAllTitles = async (req, res) => {
   try {
-    const titles = await Title.find(); // Fetch all titles from the database
+    const titles = await Title.find(); 
 
     res.status(200).json({
-      success: true,
+      msg: "fetch titles completed!!",
+      status: 200,
       titles: titles,
     });
   } catch (error) {
@@ -42,19 +43,19 @@ const getAllTitles = async (req, res) => {
   }
 };
 
-// Get a single Title by ID
 const getTitleById = async (req, res) => {
   try {
-    const { id } = req.params; // Get title ID from the URL parameter
+    const { id } = req.params;
 
-    const title = await Title.findById(id); // Find the title by ID
+    const title = await Title.findById(id);
 
     if (!title) {
       return res.status(404).json({ error: "Title not found" });
     }
 
     res.status(200).json({
-      success: true,
+      msg: "fetch title completed!!",
+      status: 200,
       title: title,
     });
   } catch (error) {
@@ -63,17 +64,23 @@ const getTitleById = async (req, res) => {
   }
 };
 
-// Update a Title by ID
-const updateTitleById = async (req, res) => {
+const updateTitle = async (req, res) => {
   try {
-    const { id } = req.params; // Get title ID from the URL parameter
-    const { title_name } = req.body; // Get new title_name from request body
+    const { id } = req.params; 
+    const { title_name } = req.body; 
+    const userId = req.user.id
 
-    // Find and update the title
+    const title = await Title.findById(id)
+
+    if (title.user_id.toString() !== userId) {
+      return res.status(404).json({
+        msg: "You don't have access to this title!!"
+      })
+    }
     const updatedTitle = await Title.findByIdAndUpdate(
       id,
       { title_name },
-      { new: true, runValidators: true } // Return the updated document and run validations
+      { new: true, runValidators: true } 
     );
 
     if (!updatedTitle) {
@@ -81,8 +88,8 @@ const updateTitleById = async (req, res) => {
     }
 
     res.status(200).json({
-      success: true,
-      message: "Title updated successfully",
+      msg: "update titles completed!!",
+      status: 200,
       title: updatedTitle,
     });
   } catch (error) {
@@ -91,20 +98,19 @@ const updateTitleById = async (req, res) => {
   }
 };
 
-// Delete a Title by ID
-const deleteTitleById = async (req, res) => {
+const deleteTitle = async (req, res) => {
   try {
-    const { id } = req.params; // Get title ID from the URL parameter
+    const { id } = req.params; r
 
-    const deletedTitle = await Title.findByIdAndDelete(id); // Find and delete the title by ID
+    const deletedTitle = await Title.findByIdAndDelete(id);
 
     if (!deletedTitle) {
       return res.status(404).json({ error: "Title not found" });
     }
 
     res.status(200).json({
-      success: true,
-      message: "Title deleted successfully",
+      msg: "delete title completed!!",
+      status: 200,
     });
   } catch (error) {
     console.error(error.message);
@@ -113,9 +119,9 @@ const deleteTitleById = async (req, res) => {
 };
 
 module.exports = {
-  createTitle,
   getAllTitles,
   getTitleById,
-  updateTitleById,
-  deleteTitleById,
+  createTitle,
+  updateTitle,
+  deleteTitle,
 };
