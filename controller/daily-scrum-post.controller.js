@@ -1,49 +1,52 @@
 const DailyScrumPost = require("../models/daily-scrum-post.model.js");
-const {
-  uploadFile,
-  getObjectSignedUrl,
-  deleteFile,
-} = require("../services/fileStorage.service.js");
+const { handleFilesUpload } = require("../services/fileUpload.service.js");
+const { getObjectSignedUrl, deleteFile } = require("../services/storage.service.js");
 
 const createDailyScrumPost = async (req, res) => {
   try {
     const user_id = req.user.id;
     const username = req.user.username;
+    const files = req.files;
 
     const { title, daily, problem, todo, createdAt } = req.body;
 
-    const savedFileKeys = [];
-    for (const file of req.files) {
-      const savedFile = await uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype
-      );
-      savedFileKeys.push(savedFile.Key);
-    }
-
-    savedFileKeys.sort((a, b) => a.localeCompare(b));
-
     const customCreatedAt = createdAt ? new Date(createdAt) : new Date();
 
+    const uploadFiles = await handleFilesUpload(files)
+    
+    const allUploadedFiles = [
+      ...uploadFiles.image,
+      ...uploadFiles.other
+    ];
+    
     const newPost = new DailyScrumPost({
       title,
       daily,
       problem,
       todo,
       writer: username,
-      user_id, 
-      files: savedFileKeys,
+      user_id,
+      files: allUploadedFiles, // ✅ Flattened array of strings
       createdAt: customCreatedAt,
       updatedAt: new Date(),
     });
+
+    const FileDetails = await Promise.all(
+      allUploadedFiles.map(async (file) => ({
+        name: file,
+        url: await getObjectSignedUrl(file),
+      }))
+    );    
 
     await newPost.save();
 
     res.status(201).json({
       msg: "create daily-scrum completed!!",
       status: 201,
-      dailyScrum: newPost,
+      dailyScrum: {
+        ...newPost.toObject(),
+        files: FileDetails
+      },
     });
   } catch (error) {
     console.error(error.message);
@@ -54,7 +57,7 @@ const createDailyScrumPost = async (req, res) => {
 const updateDailyScrumPost = async (req, res) => {
   try {
     const postId = req.params.id;
-    const userId = req.user.id; 
+    const userId = req.user.id;
 
     const post = await DailyScrumPost.findById(postId);
 
@@ -74,19 +77,15 @@ const updateDailyScrumPost = async (req, res) => {
     if (todo !== undefined) post.todo = todo;
 
     if (req.files && req.files.length > 0) {
-      const savedFileKeys = [];
+      const uploadFiles = await handleFilesUpload(req.files);
 
-      for (const file of req.files) {
-        const savedFile = await uploadFile(
-          file.buffer,
-          file.originalname,
-          file.mimetype
-        );
-        savedFileKeys.push(savedFile.Key);
-      }
+      const newFiles = [
+        ...uploadFiles.image,
+        ...uploadFiles.other
+      ];
 
-      savedFileKeys.sort((a, b) => a.localeCompare(b));
-      post.files = savedFileKeys;
+      // Append new files to existing files
+      post.files = (post.files || []).concat(newFiles);
     }
 
     post.updatedAt = new Date();
@@ -121,17 +120,18 @@ const getAllDailyScrum = async (req, res) => {
       return res.status(404).json({ message: "No daily scrum posts found." });
     }
 
-    const dailyScrumWithUrls = await Promise.all(
+    const dailyScrumWithFiles = await Promise.all(
       dailyScrumPosts.map(async (post) => {
-        const fileUrls = await Promise.all(
-          post.files.map(async (fileName) => {
-            return await getObjectSignedUrl(fileName);
-          })
+        const files = await Promise.all(
+          post.files.map(async (fileName) => ({
+            name: fileName,
+            url: await getObjectSignedUrl(fileName),
+          }))
         );
 
         return {
           ...post.toObject(),
-          fileUrls,
+          files,
         };
       })
     );
@@ -139,7 +139,7 @@ const getAllDailyScrum = async (req, res) => {
     res.status(200).json({
       msg: "Fetch daily-scrums completed!!",
       status: 200,
-      dailyScrums: dailyScrumWithUrls,
+      dailyScrums: dailyScrumWithFiles,
     });
   } catch (error) {
     console.error(error.message);
@@ -159,21 +159,22 @@ const getDailyScrumByID = async (req, res) => {
       return res.status(404).json({ message: "Daily scrum post not found." });
     }
 
-    const fileUrls = await Promise.all(
-      dailyScrumPost.files.map(async (fileName) => {
-        return await getObjectSignedUrl(fileName); 
-      })
+    const files = await Promise.all(
+      dailyScrumPost.files.map(async (fileName) => ({
+        name: fileName,
+        url: await getObjectSignedUrl(fileName),
+      }))
     );
 
-    const dailyScrumWithUrls = {
+    const dailyScrumWithFiles = {
       ...dailyScrumPost.toObject(),
-      fileUrls,
+      files,
     };
 
     res.status(200).json({
       msg: "fetch daily-scrum completed!!",
       status: 200,
-      dailyScrum: dailyScrumWithUrls,
+      dailyScrum: dailyScrumWithFiles,
     });
   } catch (error) {
     console.error(error.message);
@@ -183,32 +184,27 @@ const getDailyScrumByID = async (req, res) => {
 
 const deleteDailyScrumPost = async (req, res) => {
   try {
-    const { id } = req.params; 
+      const { id } = req.params
+      const dailyScrum = await DailyScrumPost.findById(id)
 
-    const post = await DailyScrumPost.findById(id);
+      if (!dailyScrum) return res.status(404).json({ message: 'Daily-scrum not found' })
 
-    if (!post) {
-      return res.status(404).json({ error: "DailyScrumPost not found" });
-    }
+      const allFiles = [...dailyScrum.files]
+      const deletePromises = allFiles.map(deleteFile)
 
-    if (post.files && post.files.length > 0) {
-      const deletePromises = post.files.map((fileName) => deleteFile(fileName));
-      await Promise.all(deletePromises);
-    } else {
-      console.log("No files to delete in this Daily Scrum post.");
-    }
+      await Promise.all(deletePromises)
+      await DailyScrumPost.findByIdAndDelete(id)
 
-    await DailyScrumPost.findByIdAndDelete(id);
-
-    res.status(200).json({
-      msg: "delete daily-scrum completed!!",
-      status: 200,
-    });
+      res.status(200).json({ 
+          message: 'DailyScrumPost deleted successfully!' 
+      })
   } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: "Failed to delete files and post" });
+      res.status(500).json({
+          message: 'Internal Server Error',
+          error: error.message,
+      })
   }
-};
+}
 
 const addReview = async (req, res) => {
   try {
@@ -223,7 +219,7 @@ const addReview = async (req, res) => {
     const newReview = {
       review_text,
       score,
-      reviewer, 
+      reviewer,
     };
 
     post.review.push(newReview);
@@ -283,10 +279,10 @@ const getAllReviews = async (req, res) => {
       return res.status(404).json({ error: "DailyScrumPost not found" });
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       msg: "fetch reviews completed!!",
       status: 200,
-      reviews: post.review 
+      reviews: post.review,
     });
   } catch (error) {
     console.error("Error getting reviews:", error.message);
@@ -312,7 +308,7 @@ const getReviewById = async (req, res) => {
     res.status(200).json({
       msg: "fetch review completed!!",
       status: 200,
-      review
+      review,
     });
   } catch (error) {
     console.error("Error getting review:", error.message);
