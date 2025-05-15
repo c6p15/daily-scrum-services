@@ -4,19 +4,18 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const jwt = require('jsonwebtoken')
 const path = require('path');
+const storage = require('../services/storage.service.js')
 
 const app = express();
 
 const cors = require("cors");
 
 const Port = process.env.port;
-const fPort = process.env.frontend_port;
 const Host = process.env.host || "localhost";
-const fHost = process.env.frontend_host || "localhost";
 
 app.use(
   cors({
-    origin: `http://${fHost}:${fPort}`,
+    origin: process.env.frontend_url,
     credentials: true, // allow cookies
   })
 );
@@ -57,9 +56,32 @@ app.get(
       { expiresIn: "30d" }
     );
 
-    res.redirect(`http://${fHost}:${fPort}/login-success?token=${token}`);
+    res.redirect(`${process.env.frontend_url}/login-success?token=${token}`);
   }
 );
+
+app.get('/api/files/:filename', async (req, res) => {
+  try {
+      const filename = req.params.filename
+      const storageDriver = process.env.STORAGE_DRIVER || (process.env.NODE_ENV === 'development' ? 'local' : 's3')
+      
+      if (storageDriver === 's3') {
+          // For S3 storage, redirect to the signed URL
+          const signedUrl = await storage.getObjectSignedUrl(filename)
+          return res.redirect(signedUrl)
+      } else {
+          // For local storage, serve the file directly
+          const storagePath = process.env.STORAGE_PATH || './uploads'
+          const absoluteStoragePath = path.resolve(storagePath)
+          const filePath = path.join(absoluteStoragePath, filename)
+          return res.sendFile(filePath)
+      }
+  } catch (error) {
+      console.error(`Error serving file: ${error.message}`)
+      return res.status(404).json({ message: 'File not found' })
+  }
+})
+
 
 const userRoutes = require("../routers/user.routes.js");
 const dailyScrumRoutes = require('../routers/daily-scrum.routes.js')
