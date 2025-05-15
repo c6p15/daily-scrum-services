@@ -24,16 +24,10 @@ async function ensureDirectoryExists() {
 
 ensureDirectoryExists();
 
-async function uploadFile(fileBuffer, originalName, mimetype) {
+async function uploadFile(fileBuffer, fileName, mimetype) {
   await ensureDirectoryExists();
 
-  const timestamp = Date.now();
-  const randomSuffix = crypto.randomBytes(6).toString('hex');
-  const ext = path.extname(originalName);
-  const baseName = path.basename(originalName, ext);
-  const fileName = `${baseName}-${timestamp}-${randomSuffix}${ext}`;
   const filePath = path.join(absoluteStoragePath, fileName);
-
   await writeFile(filePath, fileBuffer);
   return { Key: fileName };
 }
