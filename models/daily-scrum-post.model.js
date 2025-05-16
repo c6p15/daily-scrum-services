@@ -15,6 +15,9 @@ const DailyScrumPostSchema = mongoose.Schema(
         todo: {
             type: String,
         },
+        properties: {
+            type: String,
+        },
         files: {
             type: [String],
             default: []
