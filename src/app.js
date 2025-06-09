@@ -18,7 +18,7 @@ const Host = process.env.host || "localhost";
 
 app.use(
   cors({
-    origin: process.env.frontend_url,
+    origin: true,
     credentials: true,
   })
 );
@@ -42,10 +42,21 @@ app.use(passport.session());
 
 app.get(
   "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+  (req, res, next) => {
+    const state = req.query.state;
+    passport.authenticate("google", {
+      scope: ["profile", "email"],
+      state,
+    })(req, res, next);
+  }
 );
+
 app.get(
   "/auth/google/callback",
+  (req, res, next) => {
+    res.locals.redirectState = req.query.state;
+    next();
+  },
   passport.authenticate("google", { failureRedirect: "/" }),
   (req, res) => {
     const token = jwt.sign(
@@ -58,7 +69,8 @@ app.get(
       { expiresIn: "30d" }
     );
 
-    res.redirect(`${process.env.frontend_url}/login-success?token=${token}`);
+    const frontendURL = res.locals.redirectState || process.env.FRONTEND_URL;
+    res.redirect(`${frontendURL}/login-success?token=${token}`);
   }
 );
 

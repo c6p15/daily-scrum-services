@@ -197,11 +197,45 @@ const deleteDailyScrumPost = async (req, res) => {
     await deleteFromCache(getCacheKey(id));
     await deleteFromCache(getCacheKey());
 
-    res.status(200).json({ message: "Daily scrum post deleted successfully!" });
+    res.status(200).json({ 
+      msg: "Daily scrum post deleted successfully!",
+      status: 200 
+    });
   } catch (error) {
     res
       .status(500)
       .json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+const deleteSingleFile = async (req, res) => {
+  try {
+      const { id, fileName } = req.params;
+
+      const dailyScrumPost = await DailyScrumPost.findById(id);
+      if (!dailyScrumPost) {
+          return res.status(404).json({ message: 'Daily scrum post not found' });
+      }
+
+      const fileIndex = dailyScrumPost.files.indexOf(fileName);
+
+      if (fileIndex === -1) {
+          return res.status(404).json({ message: 'File not found in post record' });
+      }
+
+      await deleteFile(fileName);
+      dailyScrumPost.files.splice(fileIndex, 1);
+      await dailyScrumPost.save();
+
+      res.status(200).json({ 
+        msg: "File deleted successfully!",
+        status: 200 
+      });
+  } catch (error) {
+      res.status(500).json({
+          message: 'Internal Server Error',
+          error: error.message,
+      });
   }
 };
 
@@ -352,6 +386,7 @@ module.exports = {
   getAllDailyScrum,
   getDailyScrumByID,
   deleteDailyScrumPost,
+  deleteSingleFile,
   addReview,
   updateReview,
   getAllReviews,
