@@ -1,96 +1,10 @@
 const DailyScrumPost = require("../models/daily-scrum-post.model.js");
 const { getFromCache,saveToCache,deleteFromCache } = require("../services/redisCache.service.js");
 const { handleFilesUpload } = require("../services/fileUpload.service.js");
-const { getObjectSignedUrl, deleteFile } = require("../services/storage.service.js");
+const { deleteFile } = require("../services/storage.service.js");
+const formatDailyScrumPost = require("../helpers/formatDailyScrumPost.helper.js")
 
 const getCacheKey = (id = "") => (id ? `dailyScrum:${id}` : `dailyScrum:all`);
-
-const createDailyScrumPost = async (req, res) => {
-  try {
-    const user_id = req.user.id;
-    const username = req.user.username;
-    const files = req.files;
-    const { title, daily, properties, problem, todo, createdAt } = req.body;
-    const customCreatedAt = createdAt ? new Date(createdAt) : new Date();
-
-    const uploadFiles = await handleFilesUpload(files);
-    const allUploadedFiles = [...uploadFiles.image, ...uploadFiles.other];
-
-    const newPost = new DailyScrumPost({
-      title,
-      daily,
-      properties,
-      problem,
-      todo,
-      writer: username,
-      user_id,
-      files: allUploadedFiles,
-      createdAt: customCreatedAt,
-      updatedAt: new Date(),
-    });
-
-    await newPost.save();
-
-    await deleteFromCache(getCacheKey());
-
-    const FileDetails = await Promise.all(
-      allUploadedFiles.map(async (file) => ({
-        name: file,
-        url: await getObjectSignedUrl(file),
-      }))
-    );
-
-    res.status(201).json({
-      msg: "create daily-scrum post completed!!",
-      status: 201,
-      dailyScrum: { ...newPost.toObject(), files: FileDetails },
-    });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: "Failed to create post" });
-  }
-};
-
-const updateDailyScrumPost = async (req, res) => {
-  try {
-    const postId = req.params.id;
-    const userId = req.user.id;
-    const post = await DailyScrumPost.findById(postId);
-
-    if (!post)
-      return res.status(404).json({ error: "Daily-scrum post not found" });
-    if (post.user_id.toString() !== userId)
-      return res.status(403).json({ error: "Unauthorized" });
-
-    const { title, daily, problem, todo } = req.body;
-    if (title !== undefined) post.title = title;
-    if (daily !== undefined) post.daily = daily;
-    if (properties !== undefined) post.properties = properties;
-    if (problem !== undefined) post.problem = problem;
-    if (todo !== undefined) post.todo = todo;
-
-    if (req.files && req.files.length > 0) {
-      const uploadFiles = await handleFilesUpload(req.files);
-      const newFiles = [...uploadFiles.image, ...uploadFiles.other];
-      post.files = (post.files || []).concat(newFiles);
-    }
-
-    post.updatedAt = new Date();
-    await post.save();
-
-    await saveToCache(getCacheKey(postId), post);
-    await deleteFromCache(getCacheKey());
-
-    res.status(200).json({
-      msg: "update daily-scrum post completed!!",
-      status: 200,
-      dailyScrum: post,
-    });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: "Failed to update daily- scrum post" });
-  }
-};
 
 const getAllDailyScrum = async (req, res) => {
   try {
@@ -118,24 +32,17 @@ const getAllDailyScrum = async (req, res) => {
     if (!dailyScrumPosts.length)
       return res.status(404).json({ message: "No daily-scrum post found." });
 
-    const dailyScrumWithFiles = await Promise.all(
-      dailyScrumPosts.map(async (post) => {
-        const files = await Promise.all(
-          post.files.map(async (fileName) => ({
-            name: fileName,
-            url: await getObjectSignedUrl(fileName),
-          }))
-        );
-        return { ...post.toObject(), files };
-      })
+    // Format all posts using the helper
+    const formattedPosts = await Promise.all(
+      dailyScrumPosts.map(formatDailyScrumPost)
     );
 
-    if (!title) await saveToCache(cacheKey, dailyScrumWithFiles);
+    if (!title) await saveToCache(cacheKey, formattedPosts);
 
     res.status(200).json({
       msg: "Fetch daily-scrum posts completed!!",
       status: 200,
-      dailyScrums: dailyScrumWithFiles,
+      dailyScrums: formattedPosts,
     });
   } catch (error) {
     console.error(error.message);
@@ -158,28 +65,105 @@ const getDailyScrumByID = async (req, res) => {
     }
 
     const dailyScrumPost = await DailyScrumPost.findById(id);
-
     if (!dailyScrumPost)
       return res.status(404).json({ message: "Daily scrum post not found." });
 
-    const files = await Promise.all(
-      dailyScrumPost.files.map(async (fileName) => ({
-        name: fileName,
-        url: await getObjectSignedUrl(fileName),
-      }))
-    );
-
-    const dailyScrumWithFiles = { ...dailyScrumPost.toObject(), files };
-    await saveToCache(cacheKey, dailyScrumWithFiles);
+    const formattedPost = await formatDailyScrumPost(dailyScrumPost);
+    await saveToCache(cacheKey, formattedPost);
 
     res.status(200).json({
       msg: "fetch daily-scrum post completed!!",
       status: 200,
-      dailyScrum: dailyScrumWithFiles,
+      dailyScrum: formattedPost,
     });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ error: "Failed to fetch daily scrum post" });
+  }
+};
+
+const createDailyScrumPost = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const username = req.user.username;
+    const files = req.files;
+    const { title, daily, properties, problem, todo, createdAt } = req.body;
+    const customCreatedAt = createdAt ? new Date(createdAt) : new Date();
+
+    const uploadFiles = await handleFilesUpload(files);
+    const allUploadedFiles = [...uploadFiles.image, ...uploadFiles.other];
+
+    const newPost = new DailyScrumPost({
+      title,
+      daily,
+      properties,
+      problem,
+      todo,
+      writer: username,
+      user_id,
+      files: allUploadedFiles,
+      createdAt: customCreatedAt,
+      updatedAt: new Date(),
+    });
+
+    await newPost.save();
+
+    // Clear list cache to force reload
+    await deleteFromCache(getCacheKey());
+
+    const formattedPost = await formatDailyScrumPost(newPost);
+
+    res.status(201).json({
+      msg: "create daily-scrum post completed!!",
+      status: 201,
+      dailyScrum: formattedPost,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ error: "Failed to create post" });
+  }
+};
+
+const updateDailyScrumPost = async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const userId = req.user.id;
+    const post = await DailyScrumPost.findById(postId);
+
+    if (!post)
+      return res.status(404).json({ error: "Daily-scrum post not found" });
+    if (post.user_id.toString() !== userId)
+      return res.status(403).json({ error: "Unauthorized" });
+
+    const { title, daily, properties, problem, todo } = req.body;
+    if (title !== undefined) post.title = title;
+    if (daily !== undefined) post.daily = daily;
+    if (properties !== undefined) post.properties = properties;
+    if (problem !== undefined) post.problem = problem;
+    if (todo !== undefined) post.todo = todo;
+
+    if (req.files && req.files.length > 0) {
+      const uploadFiles = await handleFilesUpload(req.files);
+      const newFiles = [...uploadFiles.image, ...uploadFiles.other];
+      post.files = (post.files || []).concat(newFiles);
+    }
+
+    post.updatedAt = new Date();
+    await post.save();
+
+    const formattedPost = await formatDailyScrumPost(post);
+
+    await saveToCache(getCacheKey(postId), formattedPost);
+    await deleteFromCache(getCacheKey());
+
+    res.status(200).json({
+      msg: "update daily-scrum post completed!!",
+      status: 200,
+      dailyScrum: formattedPost,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ error: "Failed to update daily- scrum post" });
   }
 };
 
@@ -260,7 +244,10 @@ const addReview = async (req, res) => {
     post.review.push(newReview);
     await post.save();
 
-    await deleteFromCache(getCacheKey(id));
+    await Promise.all([
+      deleteFromCache(getCacheKey(id)),
+      deleteFromCache(`${getCacheKey(id)}:reviews`)
+    ]);
 
     res.status(200).json({
       success: true,
@@ -290,7 +277,11 @@ const updateReview = async (req, res) => {
     if (score !== undefined) reviewInfo.score = score;
 
     await post.save();
-    await deleteFromCache(getCacheKey(id));
+    await Promise.all([
+      deleteFromCache(getCacheKey(id)),
+      deleteFromCache(`${getCacheKey(id)}:reviews`),
+      deleteFromCache(`${getCacheKey(id)}:review:${reviewId}`)
+    ]);    
 
     res.status(200).json({
       success: true,
@@ -384,7 +375,11 @@ const deleteReview = async (req, res) => {
 
     post.review.splice(reviewIndex, 1);
     await post.save();
-    await deleteFromCache(getCacheKey(id));
+    await Promise.all([
+      deleteFromCache(getCacheKey(id)),
+      deleteFromCache(`${getCacheKey(id)}:reviews`),
+      deleteFromCache(`${getCacheKey(id)}:review:${reviewId}`)
+    ]);
 
     res
       .status(200)
