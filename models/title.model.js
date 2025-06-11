@@ -3,11 +3,12 @@ const mongoose = require('mongoose')
 
 const TitleSchema = mongoose.Schema(
     {
-        title_name: {
+        title: {
             type: String
         },
         member: {
-            type: [String],
+            type: [mongoose.Schema.Types.ObjectId],
+            ref: 'User',
             default: []
         },
         user_id: {
@@ -15,6 +16,9 @@ const TitleSchema = mongoose.Schema(
             ref: 'User',
             require: true
         }
+    },
+    {
+        timestamps: true
     }
 )
 
