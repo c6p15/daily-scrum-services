@@ -14,7 +14,7 @@ router.patch('/:id', auth, upload.array('files', 10), updateDailyScrumPost);
 router.get('/', getAllDailyScrum)
 router.get('/:id', getDailyScrumByID)
 router.delete('/:id', auth, deleteDailyScrumPost)
-router.delete('/:id/file/:fileName', auth, deleteSingleFile)
+router.delete('/:id/file', auth, deleteSingleFile)
 
 router.post('/:id/review', auth, addReview)
 router.patch('/:id/review/:reviewId', auth, updateReview)

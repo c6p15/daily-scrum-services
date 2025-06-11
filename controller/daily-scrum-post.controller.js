@@ -57,7 +57,8 @@ const updateDailyScrumPost = async (req, res) => {
     const userId = req.user.id;
     const post = await DailyScrumPost.findById(postId);
 
-    if (!post) return res.status(404).json({ error: "Daily-scrum post not found" });
+    if (!post)
+      return res.status(404).json({ error: "Daily-scrum post not found" });
     if (post.user_id.toString() !== userId)
       return res.status(403).json({ error: "Unauthorized" });
 
@@ -110,8 +111,9 @@ const getAllDailyScrum = async (req, res) => {
     const query = {};
     if (title) query.title = { $regex: title, $options: "i" };
 
-    // Remove .populate() here
-    const dailyScrumPosts = await DailyScrumPost.find(query).sort({ createdAt: -1 });
+    const dailyScrumPosts = await DailyScrumPost.find(query).sort({
+      createdAt: -1,
+    });
 
     if (!dailyScrumPosts.length)
       return res.status(404).json({ message: "No daily-scrum post found." });
@@ -155,7 +157,6 @@ const getDailyScrumByID = async (req, res) => {
       });
     }
 
-    // Remove .populate() here as well
     const dailyScrumPost = await DailyScrumPost.findById(id);
 
     if (!dailyScrumPost)
@@ -197,9 +198,9 @@ const deleteDailyScrumPost = async (req, res) => {
     await deleteFromCache(getCacheKey(id));
     await deleteFromCache(getCacheKey());
 
-    res.status(200).json({ 
+    res.status(200).json({
       msg: "Daily scrum post deleted successfully!",
-      status: 200 
+      status: 200,
     });
   } catch (error) {
     res
@@ -210,32 +211,39 @@ const deleteDailyScrumPost = async (req, res) => {
 
 const deleteSingleFile = async (req, res) => {
   try {
-      const { id, fileName } = req.params;
+    const { id } = req.params;
+    const { fileName } = req.body;
 
-      const dailyScrumPost = await DailyScrumPost.findById(id);
-      if (!dailyScrumPost) {
-          return res.status(404).json({ message: 'Daily scrum post not found' });
-      }
+    if (!fileName) {
+      return res.status(400).json({ message: 'fileName is required in the request body' });
+    }
 
-      const fileIndex = dailyScrumPost.files.indexOf(fileName);
+    const dailyScrumPost = await DailyScrumPost.findById(id);
+    if (!dailyScrumPost) {
+      return res.status(404).json({ message: 'Daily scrum post not found' });
+    }
 
-      if (fileIndex === -1) {
-          return res.status(404).json({ message: 'File not found in post record' });
-      }
+    const fileIndex = dailyScrumPost.files.indexOf(fileName);
+    if (fileIndex === -1) {
+      return res.status(404).json({ message: 'File not found in post record' });
+    }
 
-      await deleteFile(fileName);
-      dailyScrumPost.files.splice(fileIndex, 1);
-      await dailyScrumPost.save();
+    await deleteFile(fileName);
+    dailyScrumPost.files.splice(fileIndex, 1);
+    await dailyScrumPost.save();
 
-      res.status(200).json({ 
-        msg: "File deleted successfully!",
-        status: 200 
-      });
+    await deleteFromCache(getCacheKey(id));
+    await deleteFromCache(getCacheKey());
+
+    res.status(200).json({ 
+      msg: "File deleted successfully!",
+      status: 200 
+    });
   } catch (error) {
-      res.status(500).json({
-          message: 'Internal Server Error',
-          error: error.message,
-      });
+    res.status(500).json({
+      message: 'Internal Server Error',
+      error: error.message,
+    });
   }
 };
 
@@ -272,7 +280,8 @@ const updateReview = async (req, res) => {
     const { review_text, score } = req.body;
 
     const post = await DailyScrumPost.findById(id);
-    if (!post) return res.status(404).json({ error: "DailyScrumPost not found" });
+    if (!post)
+      return res.status(404).json({ error: "DailyScrumPost not found" });
 
     const reviewInfo = post.review.id(reviewId);
     if (!reviewInfo) return res.status(404).json({ error: "Review not found" });
@@ -281,7 +290,7 @@ const updateReview = async (req, res) => {
     if (score !== undefined) reviewInfo.score = score;
 
     await post.save();
-    await deleteFromCache(getCacheKey(id)); 
+    await deleteFromCache(getCacheKey(id));
 
     res.status(200).json({
       success: true,
@@ -309,7 +318,8 @@ const getAllReviews = async (req, res) => {
     }
 
     const post = await DailyScrumPost.findById(id);
-    if (!post) return res.status(404).json({ error: "DailyScrumPost not found" });
+    if (!post)
+      return res.status(404).json({ error: "DailyScrumPost not found" });
 
     const reviews = post.review;
     await saveToCache(cacheKey, reviews);
@@ -340,7 +350,8 @@ const getReviewById = async (req, res) => {
     }
 
     const post = await DailyScrumPost.findById(id);
-    if (!post) return res.status(404).json({ error: "DailyScrumPost not found" });
+    if (!post)
+      return res.status(404).json({ error: "DailyScrumPost not found" });
 
     const review = post.review.id(reviewId);
     if (!review) return res.status(404).json({ error: "Review not found" });
@@ -362,18 +373,22 @@ const deleteReview = async (req, res) => {
   try {
     const { id, reviewId } = req.params;
     const post = await DailyScrumPost.findById(id);
-    if (!post) return res.status(404).json({ error: "DailyScrumPost not found" });
+    if (!post)
+      return res.status(404).json({ error: "DailyScrumPost not found" });
 
     const reviewIndex = post.review.findIndex(
       (review) => review._id.toString() === reviewId
     );
-    if (reviewIndex === -1) return res.status(404).json({ error: "Review not found" });
+    if (reviewIndex === -1)
+      return res.status(404).json({ error: "Review not found" });
 
     post.review.splice(reviewIndex, 1);
     await post.save();
     await deleteFromCache(getCacheKey(id));
 
-    res.status(200).json({ success: true, message: "Review deleted successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Review deleted successfully" });
   } catch (error) {
     console.error("Error deleting review:", error.message);
     res.status(500).json({ error: "Failed to delete review" });
