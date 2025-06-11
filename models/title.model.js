@@ -6,6 +6,10 @@ const TitleSchema = mongoose.Schema(
         title_name: {
             type: String
         },
+        member: {
+            type: [String],
+            default: []
+        },
         user_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
