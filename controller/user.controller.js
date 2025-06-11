@@ -110,7 +110,6 @@ const logout = async (req, res) => {
   }
 };
 
-
 const getInfo = async (req, res) => {
   const user = await User.findById(req.user.id); // still fetch DB data if needed
 
@@ -132,9 +131,20 @@ const getInfo = async (req, res) => {
   });
 };
 
+const getAllUsers = async (req, res) => {
+  const users = await User.find().select("-password")
+
+  res.status(200).json({
+    msg: "fetch users completed!!",
+    status: 200,
+    users
+  })
+}
+
 module.exports = {
   register,
   login,
   logout,
   getInfo,
+  getAllUsers
 };
