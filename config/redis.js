@@ -13,6 +13,9 @@ const connectRedis = async () => {
   try {
     await redisClient.connect();
     console.log("✅ Connected to Redis");
+    
+    await redisClient.flushAll();
+    console.log("🧹 Redis cache cleared on server start");
   } catch (err) {
     console.error("❌ Redis connection error:", err);
     process.exit(1); 
