@@ -1,28 +1,45 @@
-const Title = require("../models/title.model.js"); 
+const Title = require("../models/title.model.js");
+const User = require("../models/user.model.js");
+
 const { getFromCache,saveToCache,deleteFromCache } = require("../services/redisCache.service.js");
 
 const createTitle = async (req, res) => {
   try {
     const user_id = req.user.id;
-    const { title_name } = req.body;
+    const { title, member = [] } = req.body;
 
-    if (!title_name) {
-      return res.status(400).json({ error: "Title name is required" });
+    if (!title) {
+      return res.status(400).json({ error: "Title is required" });
     }
 
-    const newTitle = new Title({ 
-      title_name,
+    const newTitle = new Title({
+      title: title.trim(),
+      member,
       user_id
     });
 
+    
     await newTitle.save();
 
     await deleteFromCache('titles:all');
 
+    await Promise.all(
+      newTitle.member.map(id =>
+        deleteFromCache(`titles:all:user:${id.toString()}`)
+      )
+    );
+
+    await deleteFromCache(`titles:all:user:${user_id}`);
+
+    const users = await User.find({ _id: { $in: newTitle.member } }, 'username');
+
     res.status(201).json({
-      msg: "create title completed!!",
+      msg: "Create title completed!",
       status: 201,
-      title: newTitle,
+      title: {
+        ...newTitle.toObject(),
+        member: users
+      }
     });
   } catch (error) {
     console.error(error.message);
@@ -37,7 +54,7 @@ const getAllTitles = async (req, res) => {
     const cached = await getFromCache(cacheKey);
     if (cached) {
       return res.status(200).json({
-        msg: "fetch titles completed!!",
+        msg: "Fetch titles completed!",
         status: 200,
         titles: cached,
       });
@@ -45,12 +62,61 @@ const getAllTitles = async (req, res) => {
 
     const titles = await Title.find();
 
-    await saveToCache(cacheKey, titles, 3600);
+    const titlesWithUsernames = await Promise.all(
+      titles.map(async (title) => {
+        const members = await User.find({ _id: { $in: title.member } }, 'username');
+        return {
+          ...title.toObject(),
+          member: members
+        };
+      })
+    );
+
+    await saveToCache(cacheKey, titlesWithUsernames, 3600);
 
     res.status(200).json({
-      msg: "fetch titles completed!!",
+      msg: "Fetch titles completed!",
       status: 200,
-      titles,
+      titles: titlesWithUsernames,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ error: "Failed to fetch titles" });
+  }
+};
+
+const getAllUserTitles = async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const cacheKey = `titles:all:user:${user_id}`;
+
+    const cached = await getFromCache(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        msg: "Fetch titles completed!",
+        status: 200,
+        titles: cached,
+      });
+    }
+
+    const titles = await Title.find({ member: user_id });
+
+    const titlesWithUsernames = await Promise.all(
+      titles.map(async (title) => {
+        const members = await User.find({ _id: { $in: title.member } }, 'username');
+        return {
+          ...title.toObject(),
+          member: members
+        };
+      })
+    );
+
+    await saveToCache(cacheKey, titlesWithUsernames, 3600);
+
+    res.status(200).json({
+      msg: "Fetch titles completed!",
+      status: 200,
+      titles: titlesWithUsernames,
     });
   } catch (error) {
     console.error(error.message);
@@ -66,24 +132,30 @@ const getTitleById = async (req, res) => {
     const cached = await getFromCache(cacheKey);
     if (cached) {
       return res.status(200).json({
-        msg: "fetch title completed!!",
+        msg: "Fetch title completed!",
         status: 200,
         title: cached,
       });
     }
 
     const title = await Title.findById(id);
-
     if (!title) {
       return res.status(404).json({ error: "Title not found" });
     }
 
-    await saveToCache(cacheKey, title, 3600);
+    const members = await User.find({ _id: { $in: title.member } }, 'username');
+
+    const response = {
+      ...title.toObject(),
+      member: members
+    };
+
+    await saveToCache(cacheKey, response, 3600);
 
     res.status(200).json({
-      msg: "fetch title completed!!",
+      msg: "Fetch title completed!",
       status: 200,
-      title,
+      title: response,
     });
   } catch (error) {
     console.error(error.message);
@@ -93,35 +165,38 @@ const getTitleById = async (req, res) => {
 
 const updateTitle = async (req, res) => {
   try {
-    const { id } = req.params; 
-    const { title_name } = req.body; 
+    const { id } = req.params;
+    const { title, member } = req.body;
     const userId = req.user.id;
 
-    const title = await Title.findById(id);
-
-    if (!title) {
+    const existingTitle = await Title.findById(id);
+    if (!existingTitle) {
       return res.status(404).json({ error: "Title not found" });
     }
 
-    if (title.user_id.toString() !== userId) {
-      return res.status(403).json({ msg: "You don't have access to this title!!" });
+    if (existingTitle.user_id.toString() !== userId) {
+      return res.status(403).json({ msg: "You don't have access to this title!" });
     }
 
-    const updatedTitle = await Title.findByIdAndUpdate(
-      id,
-      { title_name },
-      { new: true, runValidators: true }
-    );
+    if (title) existingTitle.title = title.trim();
+    if (member) existingTitle.member = member;
+
+    await existingTitle.save();
 
     await Promise.all([
       deleteFromCache('titles:all'),
       deleteFromCache(`titles:${id}`)
     ]);
 
+    const members = await User.find({ _id: { $in: existingTitle.member } }, 'username');
+
     res.status(200).json({
-      msg: "update titles completed!!",
+      msg: "Update title completed!",
       status: 200,
-      title: updatedTitle,
+      title: {
+        ...existingTitle.toObject(),
+        member: members
+      }
     });
   } catch (error) {
     console.error(error.message);
@@ -139,13 +214,18 @@ const deleteTitle = async (req, res) => {
       return res.status(404).json({ error: "Title not found" });
     }
 
-    await Promise.all([
-      deleteFromCache('titles:all'),
-      deleteFromCache(`titles:${id}`)
-    ]);
+    // Clear all relevant caches
+    const cacheKeys = [
+      'titles:all',
+      `titles:${id}`,
+      ...deletedTitle.member.map(uid => `titles:all:user:${uid.toString()}`),
+      `titles:all:user:${deletedTitle.user_id.toString()}`
+    ];
+
+    await Promise.all(cacheKeys.map(deleteFromCache));
 
     res.status(200).json({
-      msg: "delete title completed!!",
+      msg: "Delete title completed!!",
       status: 200,
     });
   } catch (error) {
@@ -156,6 +236,7 @@ const deleteTitle = async (req, res) => {
 
 module.exports = {
   getAllTitles,
+  getAllUserTitles,
   getTitleById,
   createTitle,
   updateTitle,
